@@ -1,0 +1,68 @@
+SUBGRAPH(plus1)
+        DATUM(x);
+        INPUT(x);
+        DATUM(result);
+        OUTPUT(result);
+        CONST(one,1);
+        OPERATOR(result,op_PLUS,x,one);
+
+      SUBGRAPH(fact)
+        DATUM(x);
+        INPUT(x);
+        DATUM(result);
+        OUTPUT(result);
+        DATUM(resulttrue);
+        DATUM(resultfalse);
+        DATUM(xis0);
+        DATUM(iter);
+        DATUM(nextiter);
+        DATUM(xminus1);
+        DATUM(xminus1cond);
+        CONST(zero,0);
+        CONST(one,1);
+        OPERATOR(xis0,op_ISEQUAL,x,zero);
+        OPERATOR(resulttrue,op_IF,xis0,one);
+        OPERATOR(resultfalse,op_ELSE,xis0,iter);
+        OPERATOR(iter,op_TIMES,x,nextiter);
+        EXPAND(fact,MAP_IN(x,xminus1cond);MAP_OUT(result,nextiter););
+        OPERATOR(result,op_MERGE,resulttrue,resultfalse);
+        OPERATOR(xminus1,op_MINUS,x,one);
+        OPERATOR(xminus1cond,op_ELSE,xis0,xminus1);
+
+      SUBGRAPH(test)
+        DATUM(x);
+        DATUM(y);
+        INPUT(x);
+        INPUT(y);
+        DATUM(z);
+        CONST(zero,0);
+        DATUM(fact_out);
+        DATUM(fact_in);
+        DATUM(are_equal);
+        DATUM(result_false);
+        OPERATOR(are_equal,op_ISEQUAL,x,y);
+        OPERATOR(fact_in,op_IF,are_equal,x);
+        OPERATOR(result_false,op_ELSE,are_equal,zero);
+        EXPAND(fact,MAP_IN(x,fact_in);MAP_OUT(result,fact_out););
+        OPERATOR(z,op_MERGE,fact_out,result_false);
+        OUTPUT(z);
+
+
+      SUBGRAPH(main)
+        CONST(x,2);
+        CONST(y,2);
+        DATUM(z);
+        DATUM(x2);
+        DATUM(y2);
+        CONST(one,1);
+        OPERATOR(x2,op_PLUS,x,one);
+        OPERATOR(y2,op_PLUS,y,one);
+        DATUM(z2);
+        EXPAND(test,MAP_IN(x,x);MAP_IN(y,y);MAP_OUT(z,z););
+        EXPAND(test,MAP_IN(x,x2);MAP_IN(y,y2);MAP_OUT(z,z2););
+        OUTPUT(z);
+        OUTPUT(z2);
+
+
+        DATUM(end);
+        TERMINATE(end,z,z2);

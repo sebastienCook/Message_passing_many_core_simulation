@@ -1,0 +1,73 @@
+SUBGRAPH(mtrx_multiply)
+    DATUM(a00);
+    INPUT(a00);
+    DATUM(a01);
+    INPUT(a01);
+    DATUM(a10);
+    INPUT(a10);
+    DATUM(a11);
+    INPUT(a11);
+    DATUM(b00);
+    INPUT(b00);
+    DATUM(b01);
+    INPUT(b01);
+    DATUM(b10);
+    INPUT(b10);
+    DATUM(b11);
+    INPUT(b11);
+    DATUM(c00);
+    OUTPUT(c00);
+    DATUM(c01);
+    OUTPUT(c01);
+    DATUM(c10);
+    OUTPUT(c10);
+    DATUM(c11);
+    OUTPUT(c11);
+    DATUM(a00timesb00);
+    DATUM(a01timesb10);
+    DATUM(a00timesb01);
+    DATUM(a01timesb11);
+    DATUM(a10timesb00);
+    DATUM(a11timesb10);
+    DATUM(a10timesb01);
+    DATUM(a11timesb11);
+
+    OPERATOR(c00, op_PLUS, a00timesb00, a01timesb10);
+    OPERATOR(a00timesb00, op_TIMES, a00, b00);
+    OPERATOR(a01timesb10, op_TIMES, a01, b10);
+    OPERATOR(c01, op_PLUS, a00timesb01, a01timesb11);
+    OPERATOR(a00timesb01, op_TIMES, a00, b01);
+    OPERATOR(a01timesb11, op_TIMES, a01, b11);
+    OPERATOR(c10, op_PLUS, a10timesb00, a11timesb10);
+    OPERATOR(a10timesb00, op_TIMES, a10, b00);
+    OPERATOR(a11timesb10, op_TIMES, a11, b10);
+    OPERATOR(c11, op_PLUS, a10timesb01, a11timesb11);
+    OPERATOR(a10timesb01, op_TIMES, a10, b01);
+    OPERATOR(a11timesb11, op_TIMES, a11, b11);
+
+
+    SUBGRAPH(main)
+      CONST(a00,1);
+      CONST(a01,2);
+      CONST(a10,1);
+      CONST(a11,2);
+      CONST(b00,1);
+      CONST(b01,2);
+      CONST(b10,1);
+      CONST(b11,2);
+
+      DATUM(c00);
+      DATUM(c01);
+      DATUM(c10);
+      DATUM(c11);
+
+      EXPAND(mtrx_multiply,MAP_IN(a00,a00);MAP_IN(a01,a01);MAP_IN(a10,a10);MAP_IN(a11,a11);MAP_IN(b00,b00);MAP_IN(b01,b01);MAP_IN(b10,b10);MAP_IN(b11,b11);MAP_OUT(c00,c00);MAP_OUT(c01,c01);MAP_OUT(c10,c10);MAP_OUT(c11,c11););
+
+      OUTPUT(c00);
+      OUTPUT(c01);
+      OUTPUT(c10);
+      OUTPUT(c11);
+      DATUM(end1);
+      OPERATOR(end1,op_END,c00,c01);
+      DATUM(end2);
+      OPERATOR(end2,op_END,c10,c11);

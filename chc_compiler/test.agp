@@ -1,0 +1,13 @@
+
+
+      SUBGRAPH(main)
+        CONST(a00,15);
+        CONST(a01,5);
+        DATUM(r1);
+        DATUM(r2);
+        OPERATOR(r1,op_PLUS,a00,a01);
+        OPERATOR(r2,op_MINUS,a00,a01);
+        OUTPUT(r1);
+        OUTPUT(r2);
+        DATUM(end);
+        TERMINATE(end,r1,r2,a00,a01);

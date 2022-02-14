@@ -1,0 +1,24 @@
+
+
+      SUBGRAPH(test)
+        CONST(x1,1);
+        CONST(x2,2);
+        CONST(x3,3);
+        CONST(x4,4);
+        OUTPUT(x1);
+        OUTPUT(x2);
+        OUTPUT(x3);
+        OUTPUT(x4);
+
+
+      SUBGRAPH(main)
+        DATUM(a);
+        DATUM(b);
+        DATUM(c);
+        DATUM(d);
+        
+        EXPAND(test,MAP_OUT(a,x1);MAP_OUT(b,x2);MAP_OUT(c,x3);MAP_OUT(d,x4););
+        
+
+        DATUM(end);
+        OPERATOR(end,op_END,a,b);
