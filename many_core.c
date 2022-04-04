@@ -41,9 +41,12 @@ struct data_entry **data;
 clock_t BEGIN;
 
 FILE *tick_count;
-FILE *tick_types;
-FILE *buffer_size;
-FILE *bytes_inout;
+FILE *colour_array;
+FILE **core_files;
+char file_names[16][32] = {"Data/C1.txt","Data/C2.txt","Data/C3.txt","Data/C4.txt","Data/C5.txt","Data/C6.txt","Data/C7.txt","Data/C8.txt","Data/C9.txt","Data/C10.txt","Data/C11.txt","Data/C12.txt","Data/C13.txt","Data/C14.txt","Data/C15.txt","Data/C16.txt"};
+FILE *total_bytes_sent;
+FILE *bytes_per_core;
+
 
 //DO NOT REMOVE THE LINE BELLOW!! File may become corrupt if it is (used to write code array in)
 //CODE BEGINE//
@@ -2086,14 +2089,17 @@ int num_dict_entries = 2;
 int run(struct CPU **cores, int number_of_cores){
 
   int ticks=0;//number of loops accross all cores
-  int tick_type[number_of_cores][5]; //0:processing 1:garbage collection 2:result propogation 3:expansion call 4:com block
+  int total_bytes_s;
+  //0:atomic instruction 1:destruction 2:local expansion 3:expansion call 4:result propogation 5:routing 6:garbage collection 7:look for node
+  int tick_type[number_of_cores][8];
+  int bytes_per_c[number_of_cores];
   for(int i=0;i<number_of_cores;i++){
-    for(int j=0;j<5;j++){
+    for(int j=0;j<8;j++){
       tick_type[i][j]=0;
     }
+    bytes_per_c[i]=0;
   }
-  int bytes_in_out[number_of_cores][2];
-  for(int i=0;i<number_of_cores;i++){bytes_in_out[i][0]=0;bytes_in_out[i][1]=0;} //0:in 1:out
+
   int cpu_num=0;
   struct CPU *core;
   int pc,sp,lp,sp_top,oper,next_op,eom_count,largest_offset;
@@ -2215,10 +2221,11 @@ int run(struct CPU **cores, int number_of_cores){
             int  m_addr = stack[sp+stack[sp+3]-1] + stack[doffset]/4;
               pack_and_sendMessage(core->routing_table[stack[doffset+1]],stack[doffset+1],OPR,MAD);
               pack_and_sendMessage(core->routing_table[stack[doffset+1]],stack[doffset+1],m_addr,MAD);
-              bytes_in_out[cpu_num][1]+=2;
+              total_bytes_s+=2;
+              bytes_per_c[cpu_num]+=2;
           }
           stack[sp+6+stack[sp+5]]--;
-          tick_type[cpu_num][4]++;//added to com time
+          tick_type[cpu_num][1]++;//added destruction
         }else{
           tick_type[cpu_num][0]++;
           pc=SDOWN;
@@ -2251,7 +2258,7 @@ int run(struct CPU **cores, int number_of_cores){
         stack[ADDRASABLE_SPACE-3] = func_offset;
         sp = core->code_size-1;
         pc = code_expansion_add;
-        tick_type[cpu_num][0]++;
+        tick_type[cpu_num][2]++;
         break;
       }
       case code_expansion_add:
@@ -2290,7 +2297,7 @@ int run(struct CPU **cores, int number_of_cores){
           pc = code_expansion_remap;
           sp = stack[ADDRASABLE_SPACE-2];
         }//*/
-        tick_type[cpu_num][0]++;
+        tick_type[cpu_num][2]++;
         break;
       }
       case code_expansion_remap:
@@ -2339,7 +2346,7 @@ int run(struct CPU **cores, int number_of_cores){
           pack_and_sendMessage(broadcast,cpu_num,OPR,EOM);
           pc = code_expansion_input;
         }
-        tick_type[cpu_num][0]++;
+        tick_type[cpu_num][2]++;
         break;
       }
       case code_expansion_input:
@@ -2372,7 +2379,7 @@ int run(struct CPU **cores, int number_of_cores){
 						pack_and_sendMessage(broadcast,cpu_num,input_node_offset-2,stack[aoffset]);
 					}
           stack[sp+5]--;
-          tick_type[cpu_num][0]++;
+          tick_type[cpu_num][2]++;
 				}else{
           pack_and_sendMessage(broadcast,cpu_num,OPR,EOM);
           largest_offset += (code_size*(number_of_cores));
@@ -2387,14 +2394,15 @@ int run(struct CPU **cores, int number_of_cores){
   							pack_and_sendMessage(core->routing_table[i],i,getAddr(t),getData(t));
   							sendMessage(broadcast,t);
                 free(t);
-                bytes_in_out[cpu_num][1]++;
+                total_bytes_s++;
+                bytes_per_c[cpu_num]++;
   						}
   					}
   					eom_c=0;
   				}
           while(t!=NULL){t=popMessage(broadcast);free(t);}//empty q
           pc = SDOWN;
-          tick_type[cpu_num][4]++;//added to com time
+          tick_type[cpu_num][2]++;//added to com time
           free(t);
         }
         break;
@@ -2540,7 +2548,7 @@ int run(struct CPU **cores, int number_of_cores){
           sp = stack[ADDRASABLE_SPACE-2];
           pc = stack[ADDRASABLE_SPACE-1];
         }
-        tick_type[cpu_num][0]++;
+        tick_type[cpu_num][3]++;
         free(t);
         break;
       }
@@ -2563,13 +2571,15 @@ int run(struct CPU **cores, int number_of_cores){
             int  m_addr = stack[sp+stack[sp+3]-1] + stack[doffset]/4;
               pack_and_sendMessage(core->routing_table[stack[doffset+1]],stack[doffset+1],OPR,MAD);
               pack_and_sendMessage(core->routing_table[stack[doffset+1]],stack[doffset+1],m_addr,MAD);
-              bytes_in_out[cpu_num][1]+=2;
+              total_bytes_s+=2;
+              bytes_per_c[cpu_num]+=2;
           }
 
           if(stack[sp+4]==code_expansion){stack[sp+6+(stack[sp+5]*3)]--;}
           else{stack[sp+6+stack[sp+5]]--;}
 
-          tick_type[cpu_num][4]++;//added to com time
+          tick_type[cpu_num][1]++;//added to com time
+
 
         }else{
 
@@ -2629,13 +2639,11 @@ int run(struct CPU **cores, int number_of_cores){
             sp=stack[ADDRASABLE_SPACE-2];
           }
 
-          tick_type[cpu_num][0]++;
+          tick_type[cpu_num][6]++;
 
         }
         break;
       }
-      case IDLE:
-        break;
       case SDOWN: //shift down **cant be interupted**
 			{
 				//remove lp and sp entry of node
@@ -2681,7 +2689,7 @@ int run(struct CPU **cores, int number_of_cores){
 				}
         sp=sp_top;
 				pc = LFN;
-        tick_type[cpu_num][1]++;
+        tick_type[cpu_num][6]++;
       	break;
 			}
       case FND:
@@ -2721,11 +2729,12 @@ int run(struct CPU **cores, int number_of_cores){
               //printf("core %d sending %d to %d\n",cpu_num,stack[sp+2],stack[doffset+1]);
               //printf("raw offset %d : offset: %d\n",stack[sp+stack[sp+3]-1],m_addr);
               pack_and_sendMessage(core->routing_table[stack[doffset+1]],stack[doffset+1],m_addr,stack[sp+2]);
-              bytes_in_out[cpu_num][1]++;
+              total_bytes_s++;
+              bytes_per_c[cpu_num]++;
             }
          }
          stack[sp+6+stack[sp+5]]--;
-         tick_type[cpu_num][2]++; //propogate result
+         tick_type[cpu_num][4]++; //propogate result
         }else{
           pc = SDOWN;
           tick_type[cpu_num][0]++;
@@ -2740,10 +2749,9 @@ int run(struct CPU **cores, int number_of_cores){
         //  printf("core %d buff size %d\n",cpu_num,buff_size);
   //        printf("core %d BUFF size %d\n",cpu_num,buff_size);
       		if(buff_size>0){
-            tick_type[cpu_num][4]++;
       			struct Message *m = popMessage(buffer);
-            bytes_in_out[cpu_num][0]++;
       			if(oper==1){
+              tick_type[cpu_num][0]++;
       				if(next_op==MAD){
       					//look if node is in stack
       					int found = 0;
@@ -2789,26 +2797,30 @@ int run(struct CPU **cores, int number_of_cores){
       					int m_dest = m->dest;
       					if(getData(m) == EXP){
                   sendMessage(core->routing_table[m_dest],m);
-                  bytes_in_out[cpu_num][1]++;
+                  total_bytes_s++;
+                  bytes_per_c[cpu_num]++;
       						while(eom_c!=2){
                     free(m);
       							m = popMessage(buffer);
-                    bytes_in_out[cpu_num][0]++;
-                    bytes_in_out[cpu_num][1]++;
       							sendMessage(core->routing_table[m_dest],m);
+                    total_bytes_s++;
+                    bytes_per_c[cpu_num]++;
       							if(getAddr(m)==OPR && getData(m)==EOM){eom_c++;}
       						}
       					}
       					else{ //MAD
       						sendMessage(core->routing_table[m_dest],m);
+                  total_bytes_s++;
+                  bytes_per_c[cpu_num]++;
                   free(m);
       						m = popMessage(buffer);
       						sendMessage(core->routing_table[m_dest],m);
-                  bytes_in_out[cpu_num][1]+=2;
-                  bytes_in_out[cpu_num][0]++;
+                  total_bytes_s++;
+                  bytes_per_c[cpu_num]++;
       					}
-
+                tick_type[cpu_num][5]++;
       				}else{
+                tick_type[cpu_num][0]++;
       						if(getData(m)==code_end){
       							pc=code_end;
       						}else{
@@ -2817,12 +2829,16 @@ int run(struct CPU **cores, int number_of_cores){
                   }
       				}
 
+
       			}else if(m->dest != cpu_num){
+              tick_type[cpu_num][5]++;
   //            printf("routing message\n");
       				sendMessage(core->routing_table[m->dest],m);
-              bytes_in_out[cpu_num][1]++;
+              total_bytes_s++;
+              bytes_per_c[cpu_num]++;
       			}else{ //this would be just a write
       				//check if any entries in lp holds the receiving node
+              tick_type[cpu_num][0]++;
       				int lp_t = lp;
       				int size;
       				int found=0;
@@ -2864,13 +2880,15 @@ int run(struct CPU **cores, int number_of_cores){
                 if(m->repeated < 2000){
                   m->repeated++;
                   sendMessage(buffer,m);
-                  bytes_in_out[cpu_num][1]++;
+                  total_bytes_s++;
+                  bytes_per_c[cpu_num]++;
                 }
       				}
       			}
       			free(m);
       		}else if(sp >= (ADDRASABLE_SPACE-6)){
-            tick_type[cpu_num][0]++;
+
+            tick_type[cpu_num][7]++;
             sp = sp_top;
           /*  for(int i = 0; i<=lp;i+=3){
                   printf("CPU %d [%d][%d]\n",cpu_num,i,stack[i]);
@@ -2882,13 +2900,13 @@ int run(struct CPU **cores, int number_of_cores){
             }
             return 0;*/
           }else if(stack[sp+1]==0){
-            tick_type[cpu_num][0]++;
+            tick_type[cpu_num][7]++;
             pc = stack[sp+4];
           }else if(stack[sp+1]<0){
             printf("ERROR: negative num dependant at sp: %d\n",sp);
             return 0;
           }else{
-            tick_type[cpu_num][0]++;
+            tick_type[cpu_num][7]++;
             sp = sp + stack[sp+3];
             //printf("sp vs ADDRASABLE_SPACE - 5 -> %d vs %d\n",sp,ADDRASABLE_SPACE-5);
             //if(sp >= (ADDRASABLE_SPACE-6)){sp = sp_top;pc=COM;}
@@ -2969,6 +2987,7 @@ int run(struct CPU **cores, int number_of_cores){
 
   //printf("NUM TICKS: %d\n",ticks);
   fprintf(tick_count,"%d\n",ticks);
+  fprintf(total_bytes_sent,"%d\n",total_bytes_s);
   int c=0;
   for(int i=0;i<number_of_cores;i++){
   /*  c=0;
@@ -2979,11 +2998,13 @@ int run(struct CPU **cores, int number_of_cores){
     }
     fprintf(tick_types,"\n");
     printf("core %d total %d\n",i,c);*/
-    fprintf(tick_types,"%d %d %d %d %d %d\n",i,tick_type[i][0],tick_type[i][1],tick_type[i][2],tick_type[i][3],tick_type[i][4]);
-    fprintf(bytes_inout,"%d %d %d\n",i,(bytes_in_out[i][0]*8),(bytes_in_out[i][1]*8));
+    //fprintf(tick_types,"%d %d %d %d %d %d %d %d\n",tick_type[i][0],tick_type[i][1],tick_type[i][2],tick_type[i][3],tick_type[i][4],tick_type[i][5],tick_type[i][6],tick_type[i][7]);
+    fprintf(core_files[i],"%d %d %d %d %d %d %d %d\n",tick_type[i][0],tick_type[i][1],tick_type[i][2],tick_type[i][3],tick_type[i][4],tick_type[i][5],tick_type[i][6],tick_type[i][7]);
+
+    fprintf(bytes_per_core,"%d ",bytes_per_c[i]);
 
   }
-
+  fprintf(bytes_per_core,"\n");
   return 1;
 }
 
@@ -3046,9 +3067,15 @@ int main(int argc, char **argv)
 
     //open files
     tick_count = fopen("Data/tick_count.txt","w");
-    tick_types = fopen("Data/tick_by_type.txt","w");
-    buffer_size = fopen("Data/buffer_size.txt","w");
-    bytes_inout = fopen("Data/bytes_in_out.txt","w");
+    total_bytes_sent = fopen("Data/total_bytes.txt","w");
+    colour_array = fopen("Data/coloruing_array.txt","w");
+    core_files = malloc(sizeof(FILE*)*NUM_CPU);
+    for(int i = 0; i<NUM_CPU; i++){
+      core_files[i] = fopen(file_names[i],"w");
+    }
+    bytes_per_core = fopen("Data/bytes_per_core.txt","w");
+
+
 
     int iter=1;
     if(many==1){iter=1000;}
@@ -3109,8 +3136,11 @@ int main(int argc, char **argv)
       for(int i = 0; i< num_nodes_to_make; i++){
           colouring_random[i] = rand() % NUM_CPU; //random allocation
           //printf("cpu rand[%d]: %d\n", i, colouring_random[i]);
+          fprintf(colour_array,"%d ",colouring_random[i]);
           counter++;
       }
+      fprintf(colour_array,"\n");
+
 
 
       //printf("counter: %d\n", counter);
@@ -3210,10 +3240,14 @@ int main(int argc, char **argv)
 
     //close files
     fclose(tick_count);
-    fclose(tick_types);
-    fclose(buffer_size);
-    fclose(bytes_inout);
+    //fclose(tick_types);
+    fclose(total_bytes_sent);
+    fclose(bytes_per_core);
 
+    for(int i = 0; i<NUM_CPU; i++){
+      fclose(core_files[i]);
+    }
+    free(core_files);
     /***********************/
     /**** Simulation end ***/
     /***********************/
